@@ -78,7 +78,7 @@ img {
 </blockquote>
 <p><a href="http://groupware.les.inf.puc-rio.br/har">(Velloso et al., 2013)</a></p>
 <p>For our purposes, the outcome to be predicted is this class (A-E). The predictors are fine-grained sensor data timeseries. At first I thought this project would be about predicting the class of one entire repetition of the exercise from the entire timeseries of sensor data corresponding to that repetition. However, after reviewing the data and testing set, it soon became clear that the goal was to predict the class of the current repetition from data for any single point in time associated with that repetition – a rather odd formulation of the problem, in my opinion, though I suppose it could be used to provide real-time feedback during the exercise.</p>
-<p>The dataset also contains summary statistics for many overlapping windows of the raw timeseries; however since they are not available for the data in the test set, I discarded these rows prior to training my model:</p>
+<p>The dataset also contains summary statistics for many overlapping windows of the raw timeseries; however since they are not available for the data in the test set, I discarded these columns prior to training my model:</p>
 <pre class="r"><code>library(caret)
 
 # read and clean the data
