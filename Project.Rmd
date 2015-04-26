@@ -1,0 +1,124 @@
+---
+title: "Using Sensor Data to Identify Proper Performance of a Weightlifting Exercise"
+date: "April 22, 2015"
+output: html_document
+---
+
+# Abstract
+
+# Introduction
+
+The goal of this project is to predict, using sensor data, whether an individual
+performing a weightlifting exercise is using good technique or making one of four 
+specific mistakes in technique. The dataset (Velloso et al. 2013)
+was generated from four 3-axis acceleration/gyroscope/magnetism sensors: one each on 
+the participants' bicep, forearm, and belt; with another on the dumbbell itself. 
+Six individuals then performed 10 repetitions of a unilateral dumbbell biceps curl in 
+the five different ways:
+
+> exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+[Citation](http://groupware.les.inf.puc-rio.br/har)
+
+For our purposes, the outcome to be predicted is this class (A-E). The predictors
+are fine-grained sensor data timeseries. At first I
+thought this project would be about predicting the class of one entire repetition
+of the exercise from the entire timeseries of sensor data corresponding to that 
+repetition. However, after reviewing the data and testing set, it soon became clear that 
+the goal was to predict the class of the current repetition
+from data for any single point in time associated with that repetition -- 
+a somewhat bizarre and unrealistic formulation of the problem, though it may be 
+useful for providing real-time feedback.
+
+The dataset also contains summary statistics for many overlapping windows of the raw 
+timeseries; however since they are not available for the data in the test set,
+I discarded these rows prior to training my model:
+
+```{r, cache=TRUE}
+library(caret)
+setwd("~/coursera/machlearn/project/")
+
+# read and clean the data
+dataRaw <- read.csv("pml-training.csv")
+rawCols <- colnames(dataRaw)
+selectedCols <- rawCols[
+    grep(paste0("^(X|user|raw_time|cvtd|new_window|num_window|ampl|avg|var|",
+                "min|max|kurtosis|skewness|stddev)"), 
+         rawCols, invert=T)
+]
+dataClean <- dataRaw[, selectedCols]
+```
+
+Then I split the training data to hold back 30% for testing and validating my
+eventual model:
+
+```{r, cache=TRUE}
+# Split training set into train/test
+isTraining   <- createDataPartition(dataClean$classe, p = .7, list = F)
+trainingData <- dataClean[isTraining,]
+testingData  <- dataClean[-isTraining,]
+```
+
+The training data now has the `classe` outcome variable and 52 predictor variables.
+This seems to be a large number of predictors, so I attempted to reduce it using
+principal components analysis:
+
+```{r, cache=TRUE}
+threshold <- .95
+trainingPredictors <- subset(trainingData, select = -classe)
+pcaFit <- preProcess(trainingPredictors,
+                  method = "pca", thresh = threshold, 
+                  outcome=trainingData$classe)
+#print(paste("PCA at .95 resulted in ", pcaFit$numComp, "components."))
+trainingPca <- predict(pcaFit, trainingPredictors)
+```
+
+The PCA analysis picked `r pcaFit$numComp` components to explain approximately
+`r threshold * 100` percent of the variance in the data. So I did manage to reduce the number
+of predictors significantly.
+
+Since our goal is a classification problem, I wondered how one of the most basic
+classifiers -- naive Bayes -- would perform. Using the PCA reduced data and 10-fold
+cross-validation, the model had poor accuracy (and also generated some warnings):
+
+```{r, cache=TRUE}
+FOLDS <- 10
+suppressWarnings(
+    bayesPCAFit <- train(trainingData$classe ~ ., 
+                     data = trainingPca,
+                     trControl = trainControl(method = "cv", number = FOLDS),
+                     method = "nb")
+)
+print(bayesPCAFit)
+```
+
+Not only were there many warnings generated (some observations produced 0 probability
+for all classes), but the overall accuracy was only `r round( max( bayesPCAFit$results[, "Accuracy"]), 4)`.
+
+Knowing that random forests have been proven to perform well on complex datasets, I tried a model of that type next, again using the PCA-derived predictors and 10-fold
+cross-validation. Training random forests on this dataset tended to be very slow, so
+I reduced the number of trees from the default 500 to merely 50 and did not see 
+significant loss of accuracy.
+
+```{r, cache=TRUE}
+RF_NUMTREES <- 50 # Number of trees in random forest models
+rfPCAFit <- train(trainingData$classe ~ ., data = trainingPca,
+                  trControl = trainControl(method = "cv", number = FOLDS),
+                  method="rf", ntree=RF_NUMTREES)
+print(rfPCAFit)
+```
+
+The random forest fared much better, with an accuracy of 
+`r round(max(rfPCAFit$results[, "Accuracy"]), 4)` on the training set only.
+
+This was much better, but I wondered if I could increase accuracy even more by discarding PCA and using all the original predictors, without overfitting too much.
+
+```{r, cache=TRUE}
+rfFit <- train(classe ~ ., data = trainingData,
+                  trControl = trainControl(method = "cv", number = FOLDS),
+                  method="rf", ntree=RF_NUMTREES)
+print(rfFit)
+```
+
+So, without PCA preprocessing, this random forest model yields an excellent testing-set accuracy of
+`r round(max(rfFit$results[, "Accuracy"]), 4)`.
