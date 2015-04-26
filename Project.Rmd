@@ -33,7 +33,7 @@ a rather odd formulation of the problem, in my opinion, though I suppose it coul
 
 The dataset also contains summary statistics for many overlapping windows of the raw 
 timeseries; however since they are not available for the data in the test set,
-I discarded these rows prior to training my model:
+I discarded these columns prior to training my model:
 
 ```{r, cache=TRUE}
 library(caret)
