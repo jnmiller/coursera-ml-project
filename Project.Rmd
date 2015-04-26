@@ -6,6 +6,8 @@ output: html_document
 
 # Abstract
 
+In this project I attempt to predict whether an individual is performing an exercise correctly using data from sensors attached to their arm, belt, and a dumbbell. I find that naive Bayes performs poorly for this task, but a random forest model without PCA preprocessing performs with very high accuracy.
+
 # Introduction
 
 The goal of this project is to predict, using sensor data, whether an individual
@@ -18,7 +20,7 @@ the five different ways:
 
 > exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
 
-[Citation](http://groupware.les.inf.puc-rio.br/har)
+[(Velloso et al., 2013)](http://groupware.les.inf.puc-rio.br/har)
 
 For our purposes, the outcome to be predicted is this class (A-E). The predictors
 are fine-grained sensor data timeseries. At first I
@@ -27,8 +29,7 @@ of the exercise from the entire timeseries of sensor data corresponding to that
 repetition. However, after reviewing the data and testing set, it soon became clear that 
 the goal was to predict the class of the current repetition
 from data for any single point in time associated with that repetition -- 
-a somewhat bizarre and unrealistic formulation of the problem, though it may be 
-useful for providing real-time feedback.
+a rather odd formulation of the problem, in my opinion, though I suppose it could be used to provide real-time feedback during the exercise.
 
 The dataset also contains summary statistics for many overlapping windows of the raw 
 timeseries; however since they are not available for the data in the test set,
@@ -36,7 +37,6 @@ I discarded these rows prior to training my model:
 
 ```{r, cache=TRUE}
 library(caret)
-setwd("~/coursera/machlearn/project/")
 
 # read and clean the data
 dataRaw <- read.csv("pml-training.csv")
@@ -69,7 +69,6 @@ trainingPredictors <- subset(trainingData, select = -classe)
 pcaFit <- preProcess(trainingPredictors,
                   method = "pca", thresh = threshold, 
                   outcome=trainingData$classe)
-#print(paste("PCA at .95 resulted in ", pcaFit$numComp, "components."))
 trainingPca <- predict(pcaFit, trainingPredictors)
 ```
 
@@ -93,7 +92,7 @@ print(bayesPCAFit)
 ```
 
 Not only were there many warnings generated (some observations produced 0 probability
-for all classes), but the overall accuracy was only `r round( max( bayesPCAFit$results[, "Accuracy"]), 4)`.
+for all classes), but the overall accuracy was only `r round( max( bayesPCAFit$results[, "Accuracy"]), 4)` on the training set.
 
 Knowing that random forests have been proven to perform well on complex datasets, I tried a model of that type next, again using the PCA-derived predictors and 10-fold
 cross-validation. Training random forests on this dataset tended to be very slow, so
@@ -111,7 +110,8 @@ print(rfPCAFit)
 The random forest fared much better, with an accuracy of 
 `r round(max(rfPCAFit$results[, "Accuracy"]), 4)` on the training set only.
 
-This was much better, but I wondered if I could increase accuracy even more by discarding PCA and using all the original predictors, without overfitting too much.
+Still, I decided to try to increase accuracy even more by discarding PCA and using all the original predictors, as long as it did not result in overfitting. Cross-validation
+and results on the held-back data would help avoid this.
 
 ```{r, cache=TRUE}
 rfFit <- train(classe ~ ., data = trainingData,
@@ -122,3 +122,12 @@ print(rfFit)
 
 So, without PCA preprocessing, this random forest model yields an excellent testing-set accuracy of
 `r round(max(rfFit$results[, "Accuracy"]), 4)`.
+
+This was the model I used to submit answers for the auto-graded portion of this project, and it performed at 100% accuracy for that dataset. Now we can check its results on our held-out portion of the training dataset to estimate out-of-sample accuracy:
+
+```{r, cache=TRUE}
+confusionMatrix(predict(rfFit, testingData), testingData$classe)
+```
+
+Fortunately, the results are still excellent, indicating that the model has not 
+suffered from overfitting.
